@@ -1,3 +1,5 @@
+import os
+os.environ["CHROMA_AUTO_FAISS"] = "1"
 import streamlit as st
 import os
 import uuid
