@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文档对话机器人 - RAG系统</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.0/marked.min.js"></script>
+    <style>
+        * {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+        
+        code, pre, .mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #16213e 100%);
+            min-height: 100vh;
+        }
+        
+        .glass-card {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+        
+        .glass-card-hover:hover {
+            background: rgba(255, 255, 255, 0.05);
+            border-color: rgba(99, 102, 241, 0.3);
+            transform: translateY(-2px);
+            transition: all 0.3s ease;
+        }
+        
+        .neon-border {
+            position: relative;
+        }
+        
+        .neon-border::before {
+            content: '';
+            position: absolute;
+            inset: -2px;
+            background: linear-gradient(45deg, #6366f1, #8b5cf6, #06b6d4, #6366f1);
+            background-size: 400% 400%;
+            border-radius: inherit;
+            z-index: -1;
+            animation: gradient-rotate 8s ease infinite;
+            opacity: 0.5;
+        }
+        
+        @keyframes gradient-rotate {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+        
+        .chat-container {
+            height: calc(100vh - 280px);
+            min-height: 400px;
+        }
+        
+        .message-user {
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+            box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
+        }
+        
+        .message-assistant {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .typing-indicator span {
+            animation: typing 1.4s infinite both;
+        }
+        
+        .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+        
+        @keyframes typing {
+            0%, 60%, 100% { transform: translateY(0); }
+            30% { transform: translateY(-10px); }
+        }
+        
+        .glow-text {
+            text-shadow: 0 0 20px rgba(99, 102, 241, 0.5);
+        }
+        
+        .pulse-dot {
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.2); }
+        }
+        
+        .progress-bar {
+            background: linear-gradient(90deg, #6366f1, #8b5cf6, #06b6d4);
+            background-size: 200% 100%;
+            animation: progress-shine 2s linear infinite;
+        }
+        
+        @keyframes progress-shine {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+        
+        .source-card {
+            background: rgba(99, 102, 241, 0.1);
+            border-left: 3px solid #6366f1;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+            box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary:hover {
+            box-shadow: 0 6px 25px rgba(99, 102, 241, 0.5);
+            transform: translateY(-2px);
+        }
+        
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
+        }
+        
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(99, 102, 241, 0.5);
+        }
+        
+        .input-dark {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
+        }
+        
+        .input-dark:focus {
+            border-color: #6366f1;
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+            outline: none;
+        }
+        
+        .scrollbar-custom::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .scrollbar-custom::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 3px;
+        }
+        
+        .scrollbar-custom::-webkit-scrollbar-thumb {
+            background: rgba(99, 102, 241, 0.5);
+            border-radius: 3px;
+        }
+        
+        .scrollbar-custom::-webkit-scrollbar-thumb:hover {
+            background: rgba(99, 102, 241, 0.7);
+        }
+        
+        .file-item {
+            animation: slideIn 0.3s ease;
+        }
+        
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(-20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        
+        .stat-card {
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
+        }
+        
+        .tab-active {
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.5s ease;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="text-gray-100">
+    <!-- 顶部导航栏 -->
+    <header class="glass-card border-b border-white/10 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 py-3">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <h1 class="text-xl font-bold glow-text">文档对话机器人</h1>
+                        <p class="text-xs text-gray-400">基于RAG的智能问答系统</p>
+                    </div>
+                </div>
+                
+                <div class="flex items-center gap-4">
+                    <div id="connectionStatus" class="flex items-center gap-2 px-3 py-1.5 rounded-full glass-card">
+                        <span class="w-2 h-2 rounded-full bg-red-500 pulse-dot"></span>
+                        <span class="text-sm text-gray-400">未连接</span>
+                    </div>
+                    <button onclick="toggleTheme()" class="p-2 rounded-lg btn-secondary">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 py-6">
+        <div class="grid grid-cols-12 gap-6">
+            <!-- 左侧边栏 -->
+            <aside class="col-span-12 lg:col-span-3 space-y-4">
+                <!-- 文档上传卡片 -->
+                <div class="glass-card rounded-2xl p-5">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="font-semibold flex items-center gap-2">
+                            <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                            </svg>
+                            文档上传
+                        </h3>
+                        <span id="docCount" class="text-xs px-2 py-1 rounded-full bg-indigo-500/20 text-indigo-400">0 个文件</span>
+                    </div>
+                    
+                    <div class="border-2 border-dashed border-white/10 rounded-xl p-6 text-center hover:border-indigo-500/50 transition-colors cursor-pointer" onclick="document.getElementById('fileInput').click()">
+                        <input type="file" id="fileInput" multiple accept=".pdf,.txt,.md,.docx" class="hidden" onchange="handleFileSelect(event)">
+                        <svg class="w-10 h-10 mx-auto mb-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                        <p class="text-sm text-gray-400">点击或拖拽文件到这里</p>
+                        <p class="text-xs text-gray-500 mt-1">支持 PDF、TXT、MD 格式</p>
+                    </div>
+                    
+                    <div id="fileList" class="mt-4 space-y-2 max-h-40 overflow-y-auto scrollbar-custom"></div>
+                    
+                    <button onclick="uploadDocuments()" id="uploadBtn" class="w-full mt-4 btn-primary text-white py-2.5 rounded-xl font-medium flex items-center justify-center gap-2" disabled>
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+                        </svg>
+                        上传并处理
+                    </button>
+                    
+                    <div id="uploadProgress" class="mt-4 hidden">
+                        <div class="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                            <div class="h-full progress-bar rounded-full transition-all duration-300" style="width: 0%"></div>
+                        </div>
+                        <p class="text-xs text-gray-400 mt-2 text-center">正在处理文档...</p>
+                    </div>
+                </div>
+
+                <!-- 设置卡片 -->
+                <div class="glass-card rounded-2xl p-5">
+                    <h3 class="font-semibold flex items-center gap-2 mb-4">
+                        <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826 3.31-2.37 2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                        </svg>
+                        参数设置
+                    </h3>
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <label class="text-sm text-gray-400 mb-2 block">温度参数：<span id="tempValue" class="text-indigo-400 font-mono">0.7</span></label>
+                            <input type="range" id="temperature" min="0" max="1" step="0.1" value="0.7" class="w-full accent-indigo-500">
+                            <div class="flex justify-between text-xs text-gray-500 mt-1">
+                                <span>精确</span>
+                                <span>创意</span>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label class="text-sm text-gray-400 mb-2 block">Top K 检索：<span id="topKValue" class="text-indigo-400 font-mono">4</span></label>
+                            <input type="range" id="topK" min="1" max="10" step="1" value="4" class="w-full accent-indigo-500">
+                        </div>
+                        
+                        <div class="flex items-center justify-between">
+                            <span class="text-sm text-gray-400">显示来源文档</span>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="showSources" checked class="sr-only peer">
+                                <div class="w-11 h-6 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-500"></div>
+                            </label>
+                        </div>
+                        
+                        <div class="flex items-center justify-between">
+                            <span class="text-sm text-gray-400">流式输出</span>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="streamResponse" class="sr-only peer">
+                                <div class="w-11 h-6 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-500"></div>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 快捷操作 -->
+                <div class="glass-card rounded-2xl p-5">
+                    <h3 class="font-semibold flex items-center gap-2 mb-4">
+                        <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                        </svg>
+                        快捷操作
+                    </h3>
+                    
+                    <div class="space-y-2">
+                        <button onclick="clearHistory()" class="w-full btn-secondary py-2 rounded-xl text-sm flex items-center gap-2 px-3">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                            </svg>
+                            清空对话历史
+                        </button>
+                        <button onclick="exportChat()" class="w-full btn-secondary py-2 rounded-xl text-sm flex items-center gap-2 px-3">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                            </svg>
+                            导出对话记录
+                        </button>
+                        <button onclick="showApiDocs()" class="w-full btn-secondary py-2 rounded-xl text-sm flex items-center gap-2 px-3">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                            </svg>
+                            API 文档
+                        </button>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- 主对话区域 -->
+            <div class="col-span-12 lg:col-span-6">
+                <div class="glass-card rounded-2xl overflow-hidden h-full flex flex-col">
+                    <!-- 对话头部 -->
+                    <div class="p-4 border-b border-white/10 flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
+                                <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 class="font-medium">AI 助手</h3>
+                                <p class="text-xs text-gray-400">基于 DeepSeek 模型</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button onclick="toggleFullscreen()" class="p-2 rounded-lg btn-secondary">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- 对话消息 -->
+                    <div id="chatMessages" class="chat-container overflow-y-auto scrollbar-custom p-4 space-y-4 flex-1">
+                        <div class="text-center py-12">
+                            <div class="w-20 h-20 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-purple-600/20 flex items-center justify-center">
+                                <svg class="w-10 h-10 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                </svg>
+                            </div>
+                            <h3 class="text-lg font-medium text-gray-300 mb-2">暂无文档</h3>
+                            <p class="text-sm text-gray-500">请先上传文档以开始对话</p>
+                        </div>
+                    </div>
+                    
+                    <!-- 对话输入 -->
+                    <div class="p-4 border-t border-white/10">
+                        <div class="flex gap-3">
+                            <div class="flex-1 relative">
+                                <input type="text" id="questionInput" placeholder="请输入您的问题..." 
+                                    class="w-full px-4 py-3 pr-12 rounded-xl input-dark text-white placeholder-gray-500"
+                                    onkeypress="if(event.key === 'Enter') sendMessage()">
+                                <button onclick="voiceInput()" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-indigo-400 transition-colors">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                            <button onclick="sendMessage()" class="btn-primary px-6 py-3 rounded-xl flex items-center gap-2">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
+                                </svg>
+                                发送
+                            </button>
+                        </div>
+                        <div class="flex items-center justify-between mt-3 text-xs text-gray-500">
+                            <span>按 Enter 发送</span>
+                            <span id="charCount">0 / 2000</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 右侧边栏 -->
+            <aside class="col-span-12 lg:col-span-3 space-y-4">
+                <!-- 统计卡片 -->
+                <div class="glass-card rounded-2xl p-5">
+                    <h3 class="font-semibold flex items-center gap-2 mb-4">
+                        <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                        </svg>
+                        对话统计
+                    </h3>
+                    
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="stat-card rounded-xl p-3 text-center">
+                            <div id="statQuestions" class="text-2xl font-bold text-indigo-400 mono">0</div>
+                            <div class="text-xs text-gray-400 mt-1">问题数</div>
+                        </div>
+                        <div class="stat-card rounded-xl p-3 text-center">
+                            <div id="statResponses" class="text-2xl font-bold text-purple-400 mono">0</div>
+                            <div class="text-xs text-gray-400 mt-1">响应数</div>
+                        </div>
+                        <div class="stat-card rounded-xl p-3 text-center">
+                            <div id="statDocs" class="text-2xl font-bold text-cyan-400 mono">0</div>
+                            <div class="text-xs text-gray-400 mt-1">文档数</div>
+                        </div>
+                        <div class="stat-card rounded-xl p-3 text-center">
+                            <div id="statTime" class="text-2xl font-bold text-green-400 mono">0s</div>
+                            <div class="text-xs text-gray-400 mt-1">平均响应</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 最近来源文档 -->
+                <div class="glass-card rounded-2xl p-5">
+                    <h3 class="font-semibold flex items-center gap-2 mb-4">
+                        <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+                        </svg>
+                        最近引用
+                    </h3>
+                    
+                    <div id="recentSources" class="space-y-2 max-h-60 overflow-y-auto scrollbar-custom">
+                        <p class="text-sm text-gray-500 text-center py-4">暂无引用记录</p>
+                    </div>
+                </div>
+
+                <!-- 推荐问题 -->
+                <div class="glass-card rounded-2xl p-5">
+                    <h3 class="font-semibold flex items-center gap-2 mb-4">
+                        <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
+                        </svg>
+                        推荐问题
+                    </h3>
+                    
+                    <div id="suggestedQuestions" class="space-y-2">
+                        <button onclick="askSuggested('这份文档的主要内容是什么？')" class="w-full text-left px-3 py-2 rounded-lg btn-secondary text-sm hover:text-indigo-400 transition-colors">
+                            文档主要内容是什么？
+                        </button>
+                        <button onclick="askSuggested('请总结文档的关键要点')" class="w-full text-left px-3 py-2 rounded-lg btn-secondary text-sm hover:text-indigo-400 transition-colors">
+                            总结关键要点
+                        </button>
+                        <button onclick="askSuggested('文档中有什么重要结论？')" class="w-full text-left px-3 py-2 rounded-lg btn-secondary text-sm hover:text-indigo-400 transition-colors">
+                            有什么重要结论？
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 系统信息 -->
+                <div class="glass-card rounded-2xl p-5">
+                    <h3 class="font-semibold flex items-center gap-2 mb-4">
+                        <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        系统信息
+                    </h3>
+                    
+                    <div class="space-y-3 text-sm">
+                        <div class="flex justify-between">
+                            <span class="text-gray-400">会话 ID</span>
+                            <span id="sessionId" class="text-indigo-400 font-mono text-xs">-</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-400">模型</span>
+                            <span class="text-gray-300">deepseek-chat</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-400">API 状态</span>
+                            <span id="apiStatus" class="text-yellow-400">检查中...</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-400">向量数据库</span>
+                            <span class="text-gray-300">ChromaDB</span>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+        </div>
+    </main>
+
+    <!-- API 文档模态框 -->
+    <div id="apiDocsModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="glass-card rounded-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden">
+            <div class="p-4 border-b border-white/10 flex items-center justify-between">
+                <h3 class="font-semibold">API 文档</h3>
+                <button onclick="closeApiDocs()" class="p-2 rounded-lg btn-secondary">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            <div class="p-4 overflow-y-auto scrollbar-custom max-h-[60vh]">
+                <div class="space-y-4">
+                    <div class="bg-black/30 rounded-xl p-4">
+                        <div class="flex items-center gap-2 mb-2">
+                            <span class="px-2 py-1 rounded bg-green-500/20 text-green-400 text-xs font-mono">POST</span>
+                            <span class="font-mono text-sm">/upload</span>
+                        </div>
+                        <p class="text-sm text-gray-400">上传文档进行处理</p>
+                    </div>
+                    <div class="bg-black/30 rounded-xl p-4">
+                        <div class="flex items-center gap-2 mb-2">
+                            <span class="px-2 py-1 rounded bg-blue-500/20 text-blue-400 text-xs font-mono">POST</span>
+                            <span class="font-mono text-sm">/chat</span>
+                        </div>
+                        <p class="text-sm text-gray-400">发送问题获取AI回复</p>
+                    </div>
+                    <div class="bg-black/30 rounded-xl p-4">
+                        <div class="flex items-center gap-2 mb-2">
+                            <span class="px-2 py-1 rounded bg-cyan-500/20 text-cyan-400 text-xs font-mono">GET</span>
+                            <span class="font-mono text-sm">/health</span>
+                        </div>
+                        <p class="text-sm text-gray-400">检查系统健康状态</p>
+                    </div>
+                    <div class="bg-black/30 rounded-xl p-4">
+                        <div class="flex items-center gap-2 mb-2">
+                            <span class="px-2 py-1 rounded bg-red-500/20 text-red-400 text-xs font-mono">DELETE</span>
+                            <span class="font-mono text-sm">/documents</span>
+                        </div>
+                        <p class="text-sm text-gray-400">清除所有已上传文档</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'http://localhost:8000';
+        let sessionId = localStorage.getItem('sessionId') || generateSessionId();
+        let selectedFiles = [];
+        let chatHistory = JSON.parse(localStorage.getItem('chatHistory') || '[]');
+        let stats = JSON.parse(localStorage.getItem('stats') || '{"questions":0,"responses":0,"docs":0,"totalTime":0}');
+
+        document.getElementById('sessionId').textContent = sessionId.substring(0, 8) + '...';
+
+        function generateSessionId() {
+            const id = 'session_' + Math.random().toString(36).substring(2, 15);
+            localStorage.setItem('sessionId', id);
+            return id;
+        }
+
+        function saveState() {
+            localStorage.setItem('chatHistory', JSON.stringify(chatHistory));
+            localStorage.setItem('stats', JSON.stringify(stats));
+        }
+
+        function loadState() {
+            if (chatHistory.length > 0) {
+                const chatMessages = document.getElementById('chatMessages');
+                chatMessages.innerHTML = '';
+                chatHistory.forEach(msg => {
+                    const messageDiv = document.createElement('div');
+                    messageDiv.className = `flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} fade-in`;
+                    const bubbleClass = msg.role === 'user' ? 'message-user' : 'message-assistant';
+                    messageDiv.innerHTML = `
+                        <div class="max-w-[80%] ${bubbleClass} rounded-2xl px-4 py-3">
+                            <div class="text-sm leading-relaxed">${marked.parse(msg.content)}</div>
+                        </div>
+                    `;
+                    chatMessages.appendChild(messageDiv);
+                });
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
+            updateStats(0);
+            if (stats.docs > 0) {
+                document.getElementById('statDocs').textContent = stats.docs;
+            }
+        }
+
+        window.addEventListener('load', loadState);
+
+        // 检查连接状态
+        async function checkConnection() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/health`);
+                const status = document.getElementById('connectionStatus');
+                const apiStatus = document.getElementById('apiStatus');
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    status.innerHTML = '<span class="w-2 h-2 rounded-full bg-green-500 pulse-dot"></span><span class="text-sm text-green-400">已连接</span>';
+                    apiStatus.textContent = '在线';
+                    apiStatus.className = 'text-green-400';
+                    
+                    if (data.documents_loaded) {
+                        document.getElementById('statDocs').textContent = '✓';
+                    }
+                } else {
+                    throw new Error('连接失败');
+                }
+            } catch {
+                document.getElementById('connectionStatus').innerHTML = '<span class="w-2 h-2 rounded-full bg-red-500 pulse-dot"></span><span class="text-sm text-red-400">未连接</span>';
+                document.getElementById('apiStatus').textContent = '离线';
+                document.getElementById('apiStatus').className = 'text-red-400';
+            }
+        }
+
+        // 处理文件选择
+        function handleFileSelect(event) {
+            const files = Array.from(event.target.files);
+            selectedFiles = files;
+            
+            const fileList = document.getElementById('fileList');
+            fileList.innerHTML = '';
+            
+            files.forEach((file, index) => {
+                const div = document.createElement('div');
+                div.className = 'file-item flex items-center gap-2 p-2 rounded-lg bg-white/5';
+                div.innerHTML = `
+                    <svg class="w-4 h-4 text-indigo-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                    <span class="text-sm truncate flex-1">${file.name}</span>
+                    <button onclick="removeFile(${index})" class="text-gray-400 hover:text-red-400">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                `;
+                fileList.appendChild(div);
+            });
+            
+            document.getElementById('docCount').textContent = `${files.length} 个文件`;
+            document.getElementById('uploadBtn').disabled = files.length === 0;
+        }
+
+        // 移除文件
+        function removeFile(index) {
+            selectedFiles.splice(index, 1);
+            handleFileSelect({ target: { files: selectedFiles } });
+        }
+
+        // 上传文档
+        async function uploadDocuments() {
+            if (selectedFiles.length === 0) return;
+            
+            const progressDiv = document.getElementById('uploadProgress');
+            const progressBar = progressDiv.querySelector('.progress-bar');
+            progressDiv.classList.remove('hidden');
+            progressBar.style.width = '30%';
+            
+            const formData = new FormData();
+            selectedFiles.forEach(file => formData.append('files', file));
+            
+            try {
+                progressBar.style.width = '60%';
+                const response = await fetch(`${API_BASE_URL}/upload`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                progressBar.style.width = '90%';
+                const text = await response.text();
+                console.log('Response text:', text);
+                const result = JSON.parse(text);
+
+                if (result.success) {
+                    progressBar.style.width = '100%';
+                    stats.docs = result.documents_processed || selectedFiles.length;
+                    document.getElementById('statDocs').textContent = stats.docs;
+                    saveState();
+
+                    clearChatMessages();
+                    addMessage('assistant', `✅ 已成功处理 ${result.documents_processed} 个文档片段，来自 ${selectedFiles.length} 个文件。您现在可以开始提问了！`);
+
+                    selectedFiles = [];
+                    document.getElementById('fileList').innerHTML = '';
+                    document.getElementById('docCount').textContent = '0 个文件';
+                    document.getElementById('uploadBtn').disabled = true;
+                } else {
+                    addMessage('assistant', `❌ 错误：${result.message || response.statusText}`);
+                }
+            } catch (error) {
+                console.error('Upload error:', error);
+                addMessage('assistant', `❌ 上传失败：${error.message}`);
+            } finally {
+                setTimeout(() => {
+                    progressDiv.classList.add('hidden');
+                    progressBar.style.width = '0%';
+                }, 1000);
+            }
+        }
+
+        // 发送消息
+        async function sendMessage() {
+            const input = document.getElementById('questionInput');
+            const question = input.value.trim();
+            if (!question) return;
+            
+            input.value = '';
+            updateCharCount();
+            
+            addMessage('user', question);
+            showTypingIndicator();
+            
+            const startTime = Date.now();
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/chat`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        question: question,
+                        session_id: sessionId,
+                        temperature: parseFloat(document.getElementById('temperature').value)
+                    })
+                });
+                
+                const result = await response.json();
+                const endTime = Date.now();
+                const duration = ((endTime - startTime) / 1000).toFixed(1);
+                
+                hideTypingIndicator();
+                addMessage('assistant', result.answer, result.sources);
+                
+                // 更新统计
+                stats.questions++;
+                stats.responses++;
+                stats.totalTime += parseFloat(duration);
+                updateStats(duration);
+                saveState();
+
+                // 更新最近来源
+                if (result.sources && result.sources.length > 0) {
+                    updateRecentSources(result.sources);
+                }
+            } catch (error) {
+                hideTypingIndicator();
+                addMessage('assistant', `❌ 错误：${error.message}`);
+            }
+        }
+
+        // 添加消息到对话
+        function addMessage(role, content, sources = null) {
+            const chatMessages = document.getElementById('chatMessages');
+
+            chatHistory.push({ role, content });
+            saveState();
+
+            // 清空欢迎消息
+            if (chatMessages.querySelector('.text-center')) {
+                chatMessages.innerHTML = '';
+            }
+            
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `flex ${role === 'user' ? 'justify-end' : 'justify-start'} fade-in`;
+            
+            const bubbleClass = role === 'user' ? 'message-user' : 'message-assistant';
+            
+            let sourcesHtml = '';
+            if (sources && sources.length > 0 && document.getElementById('showSources').checked) {
+                sourcesHtml = `
+                    <div class="mt-3 space-y-2">
+                        <div class="text-xs text-gray-400 flex items-center gap-1">
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l1.1 1.1"></path>
+                            </svg>
+                            引用来源
+                        </div>
+                        ${sources.map((s, i) => `
+                            <div class="source-card rounded-lg p-2 text-xs">
+                                <div class="font-medium text-indigo-400">[${i + 1}] ${s.source}</div>
+                                <div class="text-gray-400 mt-1">${s.content}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }
+            
+            messageDiv.innerHTML = `
+                <div class="max-w-[80%] ${bubbleClass} rounded-2xl px-4 py-3">
+                    <div class="text-sm leading-relaxed">${marked.parse(content)}</div>
+                    ${sourcesHtml}
+                </div>
+            `;
+            
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            
+            // 高亮代码块
+            messageDiv.querySelectorAll('pre code').forEach(block => {
+                hljs.highlightElement(block);
+            });
+        }
+
+        // 显示打字指示器
+        function showTypingIndicator() {
+            const chatMessages = document.getElementById('chatMessages');
+            const indicator = document.createElement('div');
+            indicator.id = 'typingIndicator';
+            indicator.className = 'flex justify-start fade-in';
+            indicator.innerHTML = `
+                <div class="message-assistant rounded-2xl px-4 py-3">
+                    <div class="typing-indicator flex gap-1">
+                        <span class="w-2 h-2 bg-indigo-400 rounded-full"></span>
+                        <span class="w-2 h-2 bg-indigo-400 rounded-full"></span>
+                        <span class="w-2 h-2 bg-indigo-400 rounded-full"></span>
+                    </div>
+                </div>
+            `;
+            chatMessages.appendChild(indicator);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // 隐藏打字指示器
+        function hideTypingIndicator() {
+            const indicator = document.getElementById('typingIndicator');
+            if (indicator) indicator.remove();
+        }
+
+        // 更新统计
+        function updateStats(duration) {
+            document.getElementById('statQuestions').textContent = stats.questions;
+            document.getElementById('statResponses').textContent = stats.responses;
+            document.getElementById('statTime').textContent = (stats.totalTime / stats.responses).toFixed(1) + 's';
+        }
+
+        // 更新最近来源
+        function updateRecentSources(sources) {
+            const container = document.getElementById('recentSources');
+            container.innerHTML = sources.map(s => `
+                <div class="p-2 rounded-lg bg-white/5 text-xs">
+                    <div class="font-medium text-indigo-400 truncate">${s.source}</div>
+                    <div class="text-gray-400 truncate mt-1">${s.content.substring(0, 50)}...</div>
+                </div>
+            `).join('');
+        }
+
+        // 清空对话消息
+        function clearChatMessages() {
+            document.getElementById('chatMessages').innerHTML = '';
+        }
+
+        // 清空历史
+        function clearHistory() {
+            sessionId = generateSessionId();
+            document.getElementById('sessionId').textContent = sessionId.substring(0, 8) + '...';
+            stats = { questions: 0, responses: 0, docs: 0, totalTime: 0 };
+            chatHistory = [];
+            updateStats(0);
+            clearChatMessages();
+            saveState();
+            document.getElementById('recentSources').innerHTML = '<p class="text-sm text-gray-500 text-center py-4">暂无引用记录</p>';
+        }
+
+        // 导出对话
+        function exportChat() {
+            const messages = document.getElementById('chatMessages').innerText;
+            const blob = new Blob([messages], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `对话记录_${new Date().toISOString().slice(0,10)}.txt`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        // 使用推荐问题
+        function askSuggested(question) {
+            document.getElementById('questionInput').value = question;
+            sendMessage();
+        }
+
+        // 显示 API 文档
+        function showApiDocs() {
+            document.getElementById('apiDocsModal').classList.remove('hidden');
+        }
+
+        // 关闭 API 文档
+        function closeApiDocs() {
+            document.getElementById('apiDocsModal').classList.add('hidden');
+        }
+
+        // 更新字符计数
+        function updateCharCount() {
+            const input = document.getElementById('questionInput');
+            document.getElementById('charCount').textContent = `${input.value.length} / 2000`;
+        }
+
+        // 语音输入
+        function voiceInput() {
+            alert('语音输入功能即将上线！');
+        }
+
+        // 切换全屏
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen();
+            } else {
+                document.exitFullscreen();
+            }
+        }
+
+        // 切换主题
+        function toggleTheme() {
+            alert('主题切换功能即将上线！');
+        }
+
+        // 事件监听
+        document.getElementById('questionInput').addEventListener('input', updateCharCount);
+        document.getElementById('temperature').addEventListener('input', e => {
+            document.getElementById('tempValue').textContent = e.target.value;
+        });
+        document.getElementById('topK').addEventListener('input', e => {
+            document.getElementById('topKValue').textContent = e.target.value;
+        });
+
+        // 初始化
+        checkConnection();
+        setInterval(checkConnection, 10000);
+    </script>
+</body>
+</html>

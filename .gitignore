@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.Python
+.venv/
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 数据库
+docs/chroma_db/
+
+# 日志
+*.log
+
+# 临时文件
+*.tmp
+*.temp
+
+# 文档
+*.pdf
+*.txt
+*.md
