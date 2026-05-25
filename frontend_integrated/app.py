@@ -4,14 +4,13 @@ import uuid
 from typing import List, Dict, Any
 from langchain_core.documents import Document
 from langchain_core.chat_history import InMemoryChatMessageHistory
-from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough, RunnableLambda
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from langchain_openai import ChatOpenAI
+from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.document_loaders import PyPDFLoader, TextLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-# 这里换成 FAISS
 from langchain_community.vectorstores import FAISS
 from dotenv import load_dotenv
 
@@ -25,20 +24,19 @@ st.set_page_config(
 
 class RAGSystem:
     def __init__(self):
-        self.embeddings = OpenAIEmbeddings(
-            openai_api_key=os.getenv("OPENAI_API_KEY"),
-            openai_api_base=os.getenv("OPENAI_BASE_URL"),
-            model="text-embedding-3-small"
+        # ✅ 关键修复：DeepSeek 不支持 OpenAI Embedding，换成免费本地模型
+        self.embeddings = HuggingFaceEmbeddings(
+            model_name="all-MiniLM-L6-v2"
         )
-        # FAISS 存储路径
         self.persist_directory = "./faiss_db"
         self._vectorstore = None
         self._chain = None
         self._chat_history = {}
         
     def get_llm(self):
+        # ✅ DeepSeek 对话模型正常使用
         return ChatOpenAI(
-            model=os.getenv("OPENAI_MODEL", "gpt-3.5-turbo"),
+            model=os.getenv("OPENAI_MODEL", "deepseek-chat"),
             openai_api_key=os.getenv("OPENAI_API_KEY"),
             openai_api_base=os.getenv("OPENAI_BASE_URL"),
             temperature=0.1
@@ -62,13 +60,11 @@ class RAGSystem:
         )
         return text_splitter.split_documents(documents)
 
-    # 全部换成 FAISS
     def create_vectorstore(self, documents: List[Document]):
         self._vectorstore = FAISS.from_documents(
             documents=documents,
             embedding=self.embeddings
         )
-        # 保存到本地
         self._vectorstore.save_local(self.persist_directory)
         return self._vectorstore
 
@@ -140,9 +136,7 @@ Question: {question}
 
         history = self.get_session_history(session_id)
         history.add_user_message(question)
-
         result = self._chain.invoke({"question": question})
-        
         history.add_ai_message(result)
 
         vectorstore = self.get_vectorstore()
