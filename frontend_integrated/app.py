@@ -1,19 +1,18 @@
 import os
-os.environ["CHROMA_AUTO_FAISS"] = "1"
 import streamlit as st
-import os
 import uuid
 from typing import List, Dict, Any
 from langchain_core.documents import Document
 from langchain_core.chat_history import InMemoryChatMessageHistory
 from langchain_core.messages import HumanMessage, AIMessage
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough, RunnableLambda
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_community.document_loaders import PyPDFLoader, TextLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.vectorstores import Chroma
+# 这里换成 FAISS
+from langchain_community.vectorstores import FAISS
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -31,14 +30,15 @@ class RAGSystem:
             openai_api_base=os.getenv("OPENAI_BASE_URL"),
             model="text-embedding-3-small"
         )
-        self.persist_directory = "./chroma_db"
+        # FAISS 存储路径
+        self.persist_directory = "./faiss_db"
         self._vectorstore = None
         self._chain = None
         self._chat_history = {}
         
     def get_llm(self):
         return ChatOpenAI(
-            model=os.getenv("OPENAI_MODEL", "deepseek-chat"),
+            model=os.getenv("OPENAI_MODEL", "gpt-3.5-turbo"),
             openai_api_key=os.getenv("OPENAI_API_KEY"),
             openai_api_base=os.getenv("OPENAI_BASE_URL"),
             temperature=0.1
@@ -62,20 +62,22 @@ class RAGSystem:
         )
         return text_splitter.split_documents(documents)
 
+    # 全部换成 FAISS
     def create_vectorstore(self, documents: List[Document]):
-        self._vectorstore = Chroma.from_documents(
+        self._vectorstore = FAISS.from_documents(
             documents=documents,
-            embedding=self.embeddings,
-            persist_directory=self.persist_directory
+            embedding=self.embeddings
         )
-        self._vectorstore.persist()
+        # 保存到本地
+        self._vectorstore.save_local(self.persist_directory)
         return self._vectorstore
 
     def get_vectorstore(self):
         if self._vectorstore is None and os.path.exists(self.persist_directory):
-            self._vectorstore = Chroma(
-                persist_directory=self.persist_directory,
-                embedding_function=self.embeddings
+            self._vectorstore = FAISS.load_local(
+                self.persist_directory,
+                self.embeddings,
+                allow_dangerous_deserialization=True
             )
         return self._vectorstore
 
@@ -91,7 +93,7 @@ class RAGSystem:
             vectorstore = self.create_vectorstore(all_documents)
         else:
             vectorstore.add_documents(all_documents)
-            vectorstore.persist()
+            vectorstore.save_local(self.persist_directory)
 
     def get_session_history(self, session_id: str) -> InMemoryChatMessageHistory:
         if session_id not in self._chat_history:
@@ -168,7 +170,7 @@ def init_session_state():
     if "messages" not in st.session_state:
         st.session_state.messages = []
     if "documents_loaded" not in st.session_state:
-        st.session_state.documents_loaded = os.path.exists("./chroma_db")
+        st.session_state.documents_loaded = os.path.exists("./faiss_db")
 
 
 def main():
@@ -207,8 +209,8 @@ def main():
         if st.session_state.documents_loaded:
             if st.button("Clear Documents"):
                 import shutil
-                if os.path.exists("./chroma_db"):
-                    shutil.rmtree("./chroma_db")
+                if os.path.exists("./faiss_db"):
+                    shutil.rmtree("./faiss_db")
                 st.session_state.rag_system._vectorstore = None
                 st.session_state.rag_system._chain = None
                 st.session_state.documents_loaded = False
@@ -246,8 +248,6 @@ def main():
                         st.error(f"Error: {str(e)}")
     else:
         st.info("Please upload and process documents in the sidebar to start the conversation!")
-        st.image("https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=document%20chatbot%20interface%20with%20books%20and%20AI%20icon%20modern%20design&image_size=landscape_16_9", use_column_width=True)
-
 
 if __name__ == "__main__":
     main()
