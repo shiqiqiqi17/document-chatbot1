@@ -1,8 +1,9 @@
 streamlit>=1.32.0
-langchain
-langchain-core
-langchain-openai
-langchain-community
+langchain==0.1.47
+langchain-core==0.1.52
+langchain-openai==0.1.23
+langchain-community==0.0.38
 pypdf
 python-dotenv
-faiss-cpu
+chromadb==0.4.13
+protobuf==3.20.3
