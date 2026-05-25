@@ -1,0 +1,8 @@
+streamlit>=1.32.0
+langchain
+langchain-core
+langchain-openai
+langchain-community
+pypdf
+python-dotenv
+requests
