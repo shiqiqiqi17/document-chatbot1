@@ -24,7 +24,6 @@ st.set_page_config(
 
 class RAGSystem:
     def __init__(self):
-        # 使用免费开源的 Embedding 模型，兼容 DeepSeek
         self.embeddings = HuggingFaceEmbeddings(
             model_name="all-MiniLM-L6-v2"
         )
@@ -34,7 +33,6 @@ class RAGSystem:
         self._chat_history = {}
         
     def get_llm(self):
-        # DeepSeek 配置
         return ChatOpenAI(
             model=os.getenv("OPENAI_MODEL", "deepseek-chat"),
             openai_api_key=os.getenv("OPENAI_API_KEY"),
@@ -43,7 +41,8 @@ class RAGSystem:
         )
 
     def load_document(self, file_path: str) -> List[Document]:
-        ext = os.splitext(file_path)[1].lower()
+        # ✅ 已修复：os.path.splitext
+        ext = os.path.splitext(file_path)[1].lower()
         if ext == ".pdf":
             loader = PyPDFLoader(file_path)
         elif ext in [".txt", ".md"]:
@@ -119,7 +118,6 @@ Question: {question}
         def format_docs(docs):
             return "\n\n".join(doc.page_content for doc in docs)
 
-        # 已修复：使用 .invoke() 代替旧方法
         self._chain = (
             {
                 "context": RunnableLambda(lambda x: retriever.invoke(x["question"])) | format_docs,
